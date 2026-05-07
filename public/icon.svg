@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#000"/>
+  <!-- Stylised "S" letterform -->
+  <text
+    x="256" y="370"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="340"
+    font-weight="bold"
+    text-anchor="middle"
+    fill="#fff"
+    letter-spacing="-10">S</text>
+  <!-- Subtle underline accent -->
+  <rect x="140" y="400" width="232" height="12" rx="6" fill="#ffffff" opacity="0.4"/>
+</svg>
