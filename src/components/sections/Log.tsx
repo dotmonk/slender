@@ -3,8 +3,13 @@ import { useApp } from '../../context/AppContext';
 import Card from '../ui/Card';
 import DateNavigator from '../ui/DateNavigator';
 import EmptyState from '../ui/EmptyState';
-import { getWeightForDate, getCaloriesForDate, sumCalories, deriveTargetRange } from '../../utils/calculations';
+import PlanModal from '../modals/PlanModal';
+import {
+  getWeightForDate, getCaloriesForDate, sumCalories,
+  deriveTargetRangeForDate, getPlanForDate, calcBodyFat,
+} from '../../utils/calculations';
 import { fmtTime } from '../../utils/dates';
+import { WEIGHT_PLANS } from '../../constants';
 
 interface Props {
   logDate:        string;
@@ -33,6 +38,8 @@ export default function Log({ logDate, setLogDate, onOpenCalModal }: Props) {
 
   const [editingWeight, setEditingWeight] = useState(false);
   const [weightInput,   setWeightInput]   = useState('');
+  const [abdomenInput,  setAbdomenInput]  = useState('');
+  const [planModalOpen, setPlanModalOpen] = useState(false);
 
   const existing  = getWeightForDate(data.weightLog, logDate);
   const showForm  = editingWeight || !existing;
@@ -41,19 +48,38 @@ export default function Log({ logDate, setLogDate, onOpenCalModal }: Props) {
     .slice().sort((a, b) => a.datetime.localeCompare(b.datetime));
   const total   = sumCalories(entries);
 
-  const range      = deriveTargetRange(data);
-  const isMaintain = data.settings.planType === 'maintain';
+  // Per-day plan + window
+  const dayPlan    = getPlanForDate(data, logDate);
+  const range      = deriveTargetRangeForDate(data, logDate);
+  const isMaintain = dayPlan.planType === 'maintain';
   const rangeLabel = range
     ? isMaintain
       ? `${range.max} kcal target`
       : `${range.min}–${range.max} kcal window`
     : null;
 
+  // Body-fat estimate for this day's logged weight + abdomen
+  const bf = existing ? calcBodyFat(existing.weight, existing.abdomen, data.profile.gender) : null;
+
+  // Single-line summary of the plan in effect for this date.
+  const planSummary = (() => {
+    const p = WEIGHT_PLANS[dayPlan.planType];
+    if (!p) return '—';
+    const lvl = p.levels[dayPlan.planLevel];
+    if (!lvl) return p.label;
+    return p.label === 'Maintain' ? 'Maintain weight' : `${lvl.label} ${p.label.toLowerCase()}`;
+  })();
+
   function handleWeightSave() {
     const val = parseFloat(weightInput);
     if (!val || val < 10 || val > 500) return;
-    upsertWeight({ date: logDate, weight: val });
+    const abVal = abdomenInput.trim() === '' ? undefined : parseFloat(abdomenInput);
+    const abdomen = abVal !== undefined && !isNaN(abVal) && abVal >= 30 && abVal <= 250
+      ? abVal
+      : undefined;
+    upsertWeight({ date: logDate, weight: val, ...(abdomen !== undefined ? { abdomen } : {}) });
     setWeightInput('');
+    setAbdomenInput('');
     setEditingWeight(false);
   }
 
@@ -67,6 +93,7 @@ export default function Log({ logDate, setLogDate, onOpenCalModal }: Props) {
     setLogDate(d);
     setEditingWeight(false);
     setWeightInput('');
+    setAbdomenInput('');
   }
 
   function handleDeleteCal(id: string) {
@@ -81,46 +108,110 @@ export default function Log({ logDate, setLogDate, onOpenCalModal }: Props) {
       {/* ── Weight ── */}
       <Card title="Weight">
         {existing && !showForm ? (
-          <div className="list-item" style={{ paddingTop: 0 }}>
-            <div className="list-item-body">
-              <div className="list-item-title">{existing.weight} kg</div>
+          <>
+            <div className="list-item" style={{ paddingTop: 0, borderBottom: existing.abdomen != null || bf != null ? '1px solid var(--border)' : 'none' }}>
+              <div className="list-item-body">
+                <div className="list-item-title">{existing.weight} kg</div>
+              </div>
+              <div className="list-item-right">
+                <button className="btn-icon" aria-label="Edit weight"
+                  onClick={() => {
+                    setWeightInput(String(existing.weight));
+                    setAbdomenInput(existing.abdomen != null ? String(existing.abdomen) : '');
+                    setEditingWeight(true);
+                  }}>
+                  <EditIcon />
+                </button>
+                <button className="btn-icon" aria-label="Delete weight" onClick={handleWeightDelete}>
+                  <TrashIcon />
+                </button>
+              </div>
             </div>
-            <div className="list-item-right">
-              <button className="btn-icon" aria-label="Edit weight"
-                onClick={() => { setWeightInput(String(existing.weight)); setEditingWeight(true); }}>
-                <EditIcon />
-              </button>
-              <button className="btn-icon" aria-label="Delete weight" onClick={handleWeightDelete}>
-                <TrashIcon />
-              </button>
-            </div>
-          </div>
+            {existing.abdomen != null && (
+              <div className="list-item">
+                <div className="list-item-body">
+                  <div className="list-item-title">Abdomen circumference</div>
+                  <div className="list-item-sub">Relaxed, at navel</div>
+                </div>
+                <div className="list-item-right">
+                  <div className="list-item-val">{existing.abdomen}</div>
+                  <small style={{ color: 'var(--text3)' }}>cm</small>
+                </div>
+              </div>
+            )}
+            {bf != null && (
+              <div className="list-item">
+                <div className="list-item-body">
+                  <div className="list-item-title">Body fat estimate</div>
+                  <div className="list-item-sub">U.S. Army single-site tape estimate</div>
+                </div>
+                <div className="list-item-right">
+                  <div className="list-item-val">{bf}</div>
+                  <small style={{ color: 'var(--text3)' }}>%</small>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
-          <div className="form-row" style={{ alignItems: 'flex-end' }}>
-            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-              <input
-                className="form-input"
-                type="number"
-                placeholder="e.g. 82.5"
-                step={0.1} min={20} max={500}
-                inputMode="decimal"
-                value={weightInput}
-                autoFocus={editingWeight}
-                onChange={(e) => setWeightInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleWeightSave(); }}
-              />
+          <>
+            <div className="form-row" style={{ alignItems: 'flex-end' }}>
+              <div className="form-group" style={{ flex: 1, marginBottom: 8 }}>
+                <label className="form-label" htmlFor="lg-weight">Weight (kg)</label>
+                <input
+                  id="lg-weight"
+                  className="form-input"
+                  type="number"
+                  placeholder="e.g. 82.5"
+                  step={0.1} min={20} max={500}
+                  inputMode="decimal"
+                  value={weightInput}
+                  autoFocus={editingWeight}
+                  onChange={(e) => setWeightInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleWeightSave(); }}
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1, marginBottom: 8 }}>
+                <label className="form-label" htmlFor="lg-abdomen">Abdomen (cm)</label>
+                <input
+                  id="lg-abdomen"
+                  className="form-input"
+                  type="number"
+                  placeholder="optional"
+                  step={0.1} min={30} max={250}
+                  inputMode="decimal"
+                  value={abdomenInput}
+                  onChange={(e) => setAbdomenInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleWeightSave(); }}
+                />
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button className="btn btn-primary btn-sm" onClick={handleWeightSave}>Save kg</button>
+            <div style={{ fontSize: '.78rem', color: 'var(--text3)', marginTop: 0, marginBottom: 8 }}>
+              Tip: measure relaxed abdomen at the navel — used for the body-fat % estimate.
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary btn-sm" onClick={handleWeightSave}>Save</button>
               {editingWeight && (
                 <button className="btn btn-ghost btn-sm"
-                  onClick={() => { setEditingWeight(false); setWeightInput(''); }}>
+                  onClick={() => { setEditingWeight(false); setWeightInput(''); setAbdomenInput(''); }}>
                   Cancel
                 </button>
               )}
             </div>
-          </div>
+          </>
         )}
+      </Card>
+
+      {/* ── Per-day plan: compact summary + Change button ── */}
+      <Card>
+        <div className="plan-summary-row">
+          <div className="plan-summary-text">
+            <span className="plan-summary-label">Plan</span>
+            <span className="plan-summary-value">{planSummary}</span>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => setPlanModalOpen(true)}>
+            Change
+          </button>
+        </div>
       </Card>
 
       {/* ── Calorie log ── */}
@@ -162,6 +253,12 @@ export default function Log({ logDate, setLogDate, onOpenCalModal }: Props) {
           ))
         )}
       </Card>
+
+      <PlanModal
+        open={planModalOpen}
+        date={logDate}
+        onClose={() => setPlanModalOpen(false)}
+      />
     </div>
   );
 }

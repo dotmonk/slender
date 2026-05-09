@@ -56,7 +56,7 @@ export default function App() {
 
   return (
     <div className="app-root">
-      <Header />
+      <Header onNavigateHome={() => setSection('home')} />
       <main className="main-content">
         {renderSection()}
       </main>

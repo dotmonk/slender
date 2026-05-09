@@ -6,11 +6,14 @@ import {
   Tooltip, Filler,
   type ChartData,
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 import { useApp } from '../../context/AppContext';
 import Card from '../ui/Card';
 import { todayStr, addDays, shortDate, buildDateRangeFromTo } from '../../utils/dates';
-import { getWeightForDate, getCaloriesForDate, sumCalories, deriveTargetRange } from '../../utils/calculations';
+import {
+  getWeightForDate, getCaloriesForDate, sumCalories,
+  deriveTargetRangeForDate, getPlanForDate, calcBodyFat,
+} from '../../utils/calculations';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Filler);
 
@@ -139,12 +142,36 @@ export default function Charts({ chartDays, setChartDays }: Props) {
     setOffset(0);
   }
 
-  const range      = deriveTargetRange(data);
-  const isMaintain = data.settings.planType === 'maintain';
-
   const labels  = dates.map(shortDate);
   const weights = dates.map((d) => getWeightForDate(data.weightLog, d)?.weight ?? null);
-  const cals    = dates.map((d) => sumCalories(getCaloriesForDate(data.calLog, d)));
+  // Plot null on days with NO calorie entries so the line skips them rather
+  // than diving to zero. Days that have an explicit 0-kcal entry are still
+  // plotted (sum will be 0).
+  const cals    = dates.map((d) => {
+    const entries = getCaloriesForDate(data.calLog, d);
+    return entries.length === 0 ? null : sumCalories(entries);
+  });
+
+  // Body-fat % series — only filled on dates where the user logged BOTH a
+  // weight and an abdomen measurement. Days without abdomen are gaps.
+  const bodyFat = dates.map((d) => {
+    const w = getWeightForDate(data.weightLog, d);
+    if (!w || w.abdomen == null) return null;
+    return calcBodyFat(w.weight, w.abdomen, data.profile.gender);
+  });
+  const hasBodyFatData = bodyFat.some((v) => v != null);
+
+  // Per-day calorie windows — these change as weight or plan-level changes over time.
+  const perDay = dates.map((d) => {
+    const r = deriveTargetRangeForDate(data, d);
+    const plan = getPlanForDate(data, d);
+    return { range: r, isMaintain: plan.planType === 'maintain' };
+  });
+  const calMins = perDay.map((p) => p.range?.min ?? null);
+  const calMaxs = perDay.map((p) => p.range?.max ?? null);
+  const anyMaintainDay = perDay.some((p) => p.isMaintain);
+  const anyWindowDay   = perDay.some((p) => p.range && !p.isMaintain);
+  const allMaintainDays = perDay.length > 0 && perDay.every((p) => p.isMaintain);
 
   // ── Weight chart ────────────────────────────────────────────────────────────
 
@@ -180,63 +207,132 @@ export default function Charts({ chartDays, setChartDays }: Props) {
     },
   };
 
-  // ── Calorie chart ────────────────────────────────────────────────────────────
+  // ── Body-fat % chart ────────────────────────────────────────────────────────
 
-  // Determine reference lines to draw
-  const refLines: { value: number; color: string; dash: number[] }[] = [];
-  if (range) {
-    if (isMaintain) {
-      refLines.push({ value: range.max, color: c.target, dash: [4, 4] });
-    } else {
-      refLines.push({ value: range.min, color: c.target, dash: [6, 3] });
-      refLines.push({ value: range.max, color: c.target, dash: [4, 4] });
-    }
-  }
-
-  const calBarDataset = {
-    data: cals,
-    backgroundColor: cals.map((v) => {
-      if (!range) return c.bar;
-      if (isMaintain) return v > range.max * 1.05 ? c.barHov : c.bar;
-      return (v < range.min || v > range.max) ? c.barHov : c.bar;
-    }),
-    hoverBackgroundColor: c.barHov,
-    borderRadius: dates.length > 60 ? 2 : 4,
-    borderSkipped: false as const,
-  };
-
-  const calData: ChartData<'bar'> = {
+  const bodyFatData = {
     labels,
-    datasets: [
-      calBarDataset,
-      ...refLines.map((r) => ({
-        type: 'line' as const,
-        data: dates.map(() => r.value),
-        borderColor: r.color,
-        borderWidth: 1.5,
-        borderDash: r.dash,
-        pointRadius: 0,
-        fill: false,
-      })),
-    ] as ChartData<'bar'>['datasets'],
+    datasets: [{
+      data: bodyFat,
+      borderColor: c.line,
+      backgroundColor: c.fill,
+      borderWidth: 2,
+      pointRadius: dates.length > 60 ? 2 : 4,
+      pointBackgroundColor: c.line,
+      pointHoverRadius: 6,
+      fill: true,
+      tension: 0.3,
+      spanGaps: true,
+    }],
   };
 
-  const calOpts = {
+  const bodyFatOpts = {
     ...baseOptions(c),
+    spanGaps: true,
     plugins: {
       ...baseOptions(c).plugins,
       tooltip: {
         ...baseOptions(c).plugins.tooltip,
-        callbacks: { label: (ctx: { parsed: { y: number } }) => `${ctx.parsed.y} kcal` },
+        callbacks: {
+          label: (ctx: { parsed: { y: number | null } }) =>
+            ctx.parsed.y != null ? `${ctx.parsed.y}%` : 'No data',
+        },
+      },
+    },
+    scales: {
+      ...baseOptions(c).scales,
+      y: {
+        ...baseOptions(c).scales.y,
+        ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v}%` },
+      },
+    },
+  };
+
+  // ── Calorie chart (line graph: 3 series) ────────────────────────────────────
+  // Solid line: actual calories consumed.
+  // Dashed lines: per-day lower/upper window bounds.
+  // Both bounds are equal on maintain days (single target).
+
+  const calData: ChartData<'line'> = {
+    labels,
+    datasets: [
+      {
+        label: 'Consumed',
+        data: cals,
+        borderColor: c.line,
+        backgroundColor: c.fill,
+        borderWidth: 2,
+        pointRadius: dates.length > 60 ? 2 : 4,
+        pointBackgroundColor: c.line,
+        pointHoverRadius: 6,
+        fill: false,
+        tension: 0.25,
+        spanGaps: true,
+      },
+      // Lower bound (dashed): hidden if maintain on every day in the window.
+      ...(allMaintainDays ? [] : [{
+        label: 'Lower limit',
+        data: calMins,
+        borderColor: c.target,
+        borderWidth: 1.5,
+        borderDash: [6, 3],
+        pointRadius: 0,
+        fill: false,
+        tension: 0,
+        spanGaps: false,
+      }]),
+      // Upper bound (dashed)
+      {
+        label: allMaintainDays ? 'Target' : 'Upper limit',
+        data: calMaxs,
+        borderColor: c.target,
+        borderWidth: 1.5,
+        borderDash: [4, 4],
+        pointRadius: 0,
+        fill: false,
+        tension: 0,
+        spanGaps: false,
+      },
+    ],
+  };
+
+  const calOpts = {
+    ...baseOptions(c),
+    spanGaps: true,
+    plugins: {
+      ...baseOptions(c).plugins,
+      tooltip: {
+        ...baseOptions(c).plugins.tooltip,
+        callbacks: {
+          label: (ctx: { parsed: { y: number | null }; dataset?: { label?: string } }) => {
+            const lbl = ctx.dataset?.label ?? '';
+            if (ctx.parsed.y == null) return `${lbl}: —`;
+            return `${lbl}: ${Math.round(ctx.parsed.y)} kcal`;
+          },
+        },
+      },
+    },
+    scales: {
+      ...baseOptions(c).scales,
+      y: {
+        ...baseOptions(c).scales.y,
+        beginAtZero: true,
+        ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v}` },
       },
     },
   };
 
   // ── Calorie reference line legend text ───────────────────────────────────────
   function calLegend() {
-    if (!range) return null;
-    if (isMaintain) return `Dashed line = ${range.max} kcal target`;
-    return `Lines = ${range.min} kcal (lower) and ${range.max} kcal (upper) window`;
+    if (allMaintainDays && anyMaintainDay) {
+      return 'Solid = consumed · Dashed = daily target.';
+    }
+    if (anyMaintainDay && anyWindowDay) {
+      return 'Solid = consumed · Dashed lines = your daily window (or target on maintain days). Bounds shift with logged weight and any per-day plan changes.';
+    }
+    if (anyWindowDay) {
+      return 'Solid = consumed · Dashed = lower & upper of your daily window. Bounds shift with logged weight and any per-day plan changes.';
+    }
+    return null;
   }
 
   return (
@@ -304,9 +400,20 @@ export default function Charts({ chartDays, setChartDays }: Props) {
         </div>
       </Card>
 
+      {hasBodyFatData && (
+        <Card title="Body fat %">
+          <div className="chart-container">
+            <Line data={bodyFatData} options={bodyFatOpts as object} />
+          </div>
+          <div style={{ fontSize: '.78rem', color: 'var(--text3)', marginTop: 6 }}>
+            Plotted on days you logged both weight and abdomen.
+          </div>
+        </Card>
+      )}
+
       <Card title="Calories consumed">
         <div className="chart-container">
-          <Bar data={calData} options={calOpts as object} />
+          <Line data={calData} options={calOpts as object} />
         </div>
         {calLegend() && (
           <div style={{ fontSize: '.78rem', color: 'var(--text3)', marginTop: 6 }}>

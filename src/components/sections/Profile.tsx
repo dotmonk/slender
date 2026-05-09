@@ -1,18 +1,23 @@
-import { useState, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useState, useEffect, useRef } from 'react';
+import { useApp, parseBackupJson } from '../../context/AppContext';
 import Card from '../ui/Card';
 import StatBox from '../ui/StatBox';
 import { ACTIVITY_LEVELS, WEIGHT_PLANS } from '../../constants';
 import {
   getLatestWeight, calcBMR, calcTDEE, calcTarget, calcTargetRange,
-  getActivity, calcAge,
+  getActivity, calcAge, calcBodyFat,
 } from '../../utils/calculations';
+import { todayStr } from '../../utils/dates';
 import type { Gender, PlanType } from '../../types';
 
 export default function Profile() {
-  const { data, updateProfile, updateSettings } = useApp();
+  const { data, updateProfile, updateSettings, setPlanForDate, replaceData, resetData } = useApp();
+  // setPlanForDate updates settings.planType/level itself when called with today,
+  // so Profile only needs updateSettings for activity/theme changes.
   const p = data.profile;
   const s = data.settings;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [dataMsg, setDataMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   // Local form state (avoids controlled-input lag)
   const [height,    setHeight]    = useState(p.height?.toString()    ?? '');
@@ -47,8 +52,69 @@ export default function Profile() {
   }
 
   function selectActivity(id: string) { updateSettings({ activityId: id }); }
-  function selectPlanType(type: PlanType) { updateSettings({ planType: type, planLevel: 0 }); }
-  function selectPlanLevel(i: number) { updateSettings({ planLevel: i }); }
+  function selectPlanType(type: PlanType) {
+    // Today's plan change → planLog (forward-propagating). setPlanForDate
+    // also keeps settings.planType/level in sync.
+    setPlanForDate(todayStr(), type, 0);
+  }
+  function selectPlanLevel(i: number) {
+    setPlanForDate(todayStr(), s.planType, i);
+  }
+
+  // ── Backup / Restore / Clear ─────────────────────────────────────────────
+  function showDataMsg(kind: 'ok' | 'err', text: string) {
+    setDataMsg({ kind, text });
+    setTimeout(() => setDataMsg(null), 3500);
+  }
+
+  function downloadBackup() {
+    try {
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `slender-backup-${todayStr()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showDataMsg('ok', 'Backup downloaded ✓');
+    } catch (e) {
+      console.warn(e);
+      showDataMsg('err', 'Could not create backup.');
+    }
+  }
+
+  function pickRestore() { fileRef.current?.click(); }
+
+  function handleRestore(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = ''; // reset so picking the same file again still triggers change
+    if (!f) return;
+    if (!confirm(`Restore from "${f.name}"? This will overwrite all current data.`)) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const next = parseBackupJson(String(reader.result ?? ''));
+        replaceData(next);
+        showDataMsg('ok', 'Data restored ✓');
+      } catch (err) {
+        console.warn(err);
+        showDataMsg('err', err instanceof Error ? err.message : 'Could not restore file.');
+      }
+    };
+    reader.onerror = () => showDataMsg('err', 'Could not read file.');
+    reader.readAsText(f);
+  }
+
+  function clearAll() {
+    if (!confirm('Clear ALL data (profile, weights, calories, foods)? This cannot be undone — consider downloading a backup first.')) return;
+    if (!confirm('Are you really sure? This is permanent.')) return;
+    resetData();
+    showDataMsg('ok', 'All data cleared.');
+  }
 
   const currentPlan   = WEIGHT_PLANS[s.planType];
   const currentLevel  = currentPlan?.levels[s.planLevel];
@@ -102,6 +168,26 @@ export default function Profile() {
           <small>Mifflin–St Jeor formula · uses your latest logged weight</small>
         </Card>
       )}
+
+      {/* ── Body fat % (US Army single-site estimate) ── */}
+      {(() => {
+        if (!lw || !lw.abdomen || !gender) return null;
+        const bf = calcBodyFat(lw.weight, lw.abdomen, gender);
+        if (bf == null) return null;
+        return (
+          <Card title="Body Fat (Estimate)">
+            <div className="stat-row">
+              <StatBox value={`${bf}%`} label="Body fat" />
+              <StatBox value={`${lw.abdomen} cm`} label="Abdomen" />
+              <StatBox value={`${lw.weight} kg`} label="Weight" />
+            </div>
+            <small>
+              U.S. Army single-site tape estimate · log your relaxed abdomen circumference
+              (at the navel) on the Log tab.
+            </small>
+          </Card>
+        );
+      })()}
 
       {/* ── Activity ── */}
       <Card title="Activity Level">
@@ -162,8 +248,9 @@ export default function Profile() {
               </label>
               {lvl.warning && s.planLevel === i && (
                 <div className="warning-box">
-                  Extreme calorie changes may be unsafe. Consult a healthcare professional
-                  before pursuing this level.
+                  An Extreme calorie change (≥1000 kcal/day delta) carries real health risks
+                  and is rarely sustainable. Consult a healthcare professional before
+                  pursuing this level.
                 </div>
               )}
             </div>
@@ -197,6 +284,42 @@ export default function Profile() {
           </div>
         </div>
       )}
+
+      {/* ── Data management ── */}
+      <Card title="Data">
+        <div style={{ fontSize: '.85rem', color: 'var(--text2)', marginBottom: 12, lineHeight: 1.5 }}>
+          Slender stores everything locally in your browser. Back up to a JSON file
+          before clearing or switching devices.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button className="btn btn-ghost btn-full" onClick={downloadBackup}>
+            Download backup (.json)
+          </button>
+          <button className="btn btn-ghost btn-full" onClick={pickRestore}>
+            Restore from backup…
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={handleRestore}
+          />
+          <button className="btn btn-danger btn-full" onClick={clearAll}>
+            Clear all data
+          </button>
+        </div>
+        {dataMsg && (
+          <div
+            style={{
+              marginTop: 10, fontSize: '.82rem',
+              color: dataMsg.kind === 'ok' ? 'var(--text2)' : 'var(--text)',
+            }}
+          >
+            {dataMsg.text}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

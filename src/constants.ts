@@ -12,9 +12,10 @@ export const WEIGHT_PLANS: Record<string, WeightPlan> = {
   decrease: {
     label: 'Lose',
     levels: [
-      { label: 'Mild',       sub: '−250–500 kcal/day',  delta: -375, deltaMin: -500,  deltaMax: -250, warning: false },
-      { label: 'Standard',   sub: '−500–750 kcal/day',  delta: -625, deltaMin: -750,  deltaMax: -500, warning: false },
-      { label: 'Aggressive', sub: '−750–1000 kcal/day', delta: -875, deltaMin: -1000, deltaMax: -750, warning: true  },
+      { label: 'Mild',       sub: '−250–500 kcal/day',   delta: -375,  deltaMin: -500,  deltaMax: -250, warning: false },
+      { label: 'Standard',   sub: '−500–750 kcal/day',   delta: -625,  deltaMin: -750,  deltaMax: -500, warning: false },
+      { label: 'Aggressive', sub: '−750–1000 kcal/day',  delta: -875,  deltaMin: -1000, deltaMax: -750, warning: false },
+      { label: 'Extreme',    sub: '−1000–1500 kcal/day', delta: -1250, deltaMin: -1500, deltaMax: -1000, warning: true  },
     ],
   },
   maintain: {
@@ -26,9 +27,10 @@ export const WEIGHT_PLANS: Record<string, WeightPlan> = {
   increase: {
     label: 'Gain',
     levels: [
-      { label: 'Mild',       sub: '+250–500 kcal/day',  delta: 375, deltaMin: 250, deltaMax: 500,  warning: false },
-      { label: 'Standard',   sub: '+500–750 kcal/day',  delta: 625, deltaMin: 500, deltaMax: 750,  warning: false },
-      { label: 'Aggressive', sub: '+750–1000 kcal/day', delta: 875, deltaMin: 750, deltaMax: 1000, warning: true  },
+      { label: 'Mild',       sub: '+250–500 kcal/day',   delta: 375,  deltaMin: 250,  deltaMax: 500,  warning: false },
+      { label: 'Standard',   sub: '+500–750 kcal/day',   delta: 625,  deltaMin: 500,  deltaMax: 750,  warning: false },
+      { label: 'Aggressive', sub: '+750–1000 kcal/day',  delta: 875,  deltaMin: 750,  deltaMax: 1000, warning: false },
+      { label: 'Extreme',    sub: '+1000–1500 kcal/day', delta: 1250, deltaMin: 1000, deltaMax: 1500, warning: true  },
     ],
   },
 };

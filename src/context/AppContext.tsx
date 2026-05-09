@@ -5,8 +5,9 @@ import {
   useContext,
   useState,
 } from 'react';
-import type { AppData, CalorieEntry, FoodItem, Profile, Settings, WeightEntry } from '../types';
-import { loadData, saveData } from '../utils/storage';
+import type { AppData, CalorieEntry, DayPlan, FoodItem, PlanType, Profile, Settings, WeightEntry } from '../types';
+import { clearStoredData, defaultData, isValidBackup, loadData, saveData } from '../utils/storage';
+import { todayStr } from '../utils/dates';
 import { uid } from '../utils/id';
 
 // ── Context shape ─────────────────────────────────────────────────────────────
@@ -23,6 +24,9 @@ interface AppContextType {
   addFood: (food: Omit<FoodItem, 'id'>) => void;
   updateFood: (food: FoodItem) => void;
   deleteFood: (id: string) => void;
+  setPlanForDate: (date: string, planType: PlanType, planLevel: number) => void;
+  replaceData: (data: AppData) => void;
+  resetData: () => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -113,6 +117,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  /**
+   * Save a plan for a date.
+   *
+   *   - If `date` is today (or in the future), append/upsert it to
+   *     `planLog` so today + future days inherit it. Also update the
+   *     `settings` default so the Profile UI stays in sync.
+   *   - If `date` is in the past, append/upsert it to `dayPlans` only —
+   *     it applies to that one day and never propagates anywhere else.
+   */
+  const setPlanForDate = useCallback(
+    (date: string, planType: PlanType, planLevel: number) =>
+      update((d) => {
+        const isPast = date < todayStr();
+        const next: DayPlan = { date, planType, planLevel };
+
+        if (isPast) {
+          const list = d.dayPlans ?? [];
+          const idx  = list.findIndex((p) => p.date === date);
+          const dayPlans =
+            idx !== -1 ? list.map((p, i) => (i === idx ? next : p)) : [...list, next];
+          return { ...d, dayPlans };
+        }
+
+        const list = d.planLog ?? [];
+        const idx  = list.findIndex((p) => p.date === date);
+        const planLog =
+          idx !== -1 ? list.map((p, i) => (i === idx ? next : p)) : [...list, next];
+        // Also update the default in settings so Profile/Home reflect today's pick.
+        const settings = { ...d.settings, planType, planLevel };
+        return { ...d, planLog, settings };
+      }),
+    [update],
+  );
+
+  const replaceData = useCallback(
+    (next: AppData) => {
+      saveData(next);
+      setData(next);
+    },
+    [],
+  );
+
+  const resetData = useCallback(() => {
+    clearStoredData();
+    setData(defaultData());
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -127,6 +178,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addFood,
         updateFood,
         deleteFood,
+        setPlanForDate,
+        replaceData,
+        resetData,
       }}
     >
       {children}
@@ -140,4 +194,16 @@ export function useApp(): AppContextType {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used inside <AppProvider>');
   return ctx;
+}
+
+/**
+ * Parses a JSON string into an AppData by merging onto defaults.
+ * Throws on invalid JSON or unrecognised structure.
+ */
+export function parseBackupJson(raw: string): AppData {
+  const parsed: unknown = JSON.parse(raw);
+  if (!isValidBackup(parsed)) {
+    throw new Error('File does not look like a Slender backup.');
+  }
+  return Object.assign(defaultData(), parsed as Partial<AppData>);
 }

@@ -1,14 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#000"/>
-  <!-- Stylised "S" letterform -->
-  <text
-    x="256" y="370"
-    font-family="Georgia, 'Times New Roman', serif"
-    font-size="340"
-    font-weight="bold"
-    text-anchor="middle"
-    fill="#fff"
-    letter-spacing="-10">S</text>
-  <!-- Subtle underline accent -->
-  <rect x="140" y="400" width="232" height="12" rx="6" fill="#ffffff" opacity="0.4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Slender">
+  <!-- Rounded-square background -->
+  <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
+
+  <!--
+    A tall, slender, faceless figure in a suit, in the spirit of the
+    Slender Man myth — used here as a stylised mascot for the app.
+    All silhouette shapes are pure white on black so the icon scales
+    cleanly down to favicon sizes.
+  -->
+  <g fill="#ffffff">
+    <!-- Small oval head (faceless) -->
+    <ellipse cx="256" cy="120" rx="32" ry="42"/>
+
+    <!-- Narrow neck -->
+    <rect x="248" y="158" width="16" height="14"/>
+
+    <!-- Torso: narrow shoulders, slight taper to waist (suit jacket) -->
+    <path d="M 220 170
+             L 292 170
+             L 302 230
+             L 294 320
+             L 218 320
+             L 210 230
+             Z"/>
+
+    <!-- Two slim legs -->
+    <rect x="220" y="320" width="28" height="138" rx="3"/>
+    <rect x="264" y="320" width="28" height="138" rx="3"/>
+
+    <!-- Two unnaturally long, thin arms hanging straight down -->
+    <rect x="180" y="200" width="16" height="220" rx="8"/>
+    <rect x="316" y="200" width="16" height="220" rx="8"/>
+  </g>
+
+  <!-- Subtle suit-jacket centreline -->
+  <line x1="256" y1="174" x2="256" y2="316"
+        stroke="#0a0a0a" stroke-width="2" opacity="0.35"/>
 </svg>

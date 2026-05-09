@@ -4,8 +4,9 @@ import StatBox from '../ui/StatBox';
 import ProgressBar from '../ui/ProgressBar';
 import {
   getLatestWeight, getCaloriesForDate, sumCalories,
-  deriveTargetRange, profileComplete,
+  deriveTargetRangeForDate, profileComplete,
   calcBMR, calcTDEE, calcTarget, getActivity, calcAge,
+  calcBodyFat, getPlanForDate,
 } from '../../utils/calculations';
 import { todayStr, displayDate } from '../../utils/dates';
 import type { Section } from '../../types';
@@ -18,25 +19,28 @@ interface Props {
 export default function Home({ onNavigate }: Props) {
   const { data } = useApp();
 
-  const todayEntries = getCaloriesForDate(data.calLog, todayStr());
+  const today        = todayStr();
+  const todayEntries = getCaloriesForDate(data.calLog, today);
   const consumed     = sumCalories(todayEntries);
-  const range        = deriveTargetRange(data);
-  const isMaintain   = data.settings.planType === 'maintain';
+  const range        = deriveTargetRangeForDate(data, today);
+  const todayPlan    = getPlanForDate(data, today);
+  const isMaintain   = todayPlan.planType === 'maintain';
 
   // Progress bar uses upper bound so the bar fills toward the max of the window
   const progressMax = range?.max ?? 0;
   const pct         = progressMax > 0 ? Math.min(Math.round((consumed / progressMax) * 100), 100) : 0;
 
-  // For BMR/TDEE budget card
+  // For BMR/TDEE budget card — uses latest weight (which now drives the window)
   const lw   = getLatestWeight(data.weightLog);
   const age  = calcAge(data.profile.birthdate);
   const bmr  = calcBMR(lw?.weight ?? null, data.profile.height, age, data.profile.gender);
   const tdee = calcTDEE(bmr, getActivity(data.settings.activityId).factor);
-  const tgt  = calcTarget(tdee, data.settings.planType, data.settings.planLevel);
+  const tgt  = calcTarget(tdee, todayPlan.planType, todayPlan.planLevel);
 
   const bmi = lw && data.profile.height
     ? (lw.weight / Math.pow(data.profile.height / 100, 2)).toFixed(1)
     : null;
+  const bf  = lw ? calcBodyFat(lw.weight, lw.abdomen, data.profile.gender) : null;
 
   // Calorie summary label
   function calSummaryLabel() {
@@ -89,6 +93,7 @@ export default function Home({ onNavigate }: Props) {
             <div className="stat-row">
               <StatBox value={`${lw.weight} kg`} label="Current" />
               {bmi && <StatBox value={bmi} label="BMI" />}
+              {bf != null && <StatBox value={`${bf}%`} label="Body fat" />}
             </div>
             <small>Last logged: {displayDate(lw.date)}</small>
           </>
@@ -114,7 +119,7 @@ export default function Home({ onNavigate }: Props) {
             </div>
             <small>
               {getActivity(data.settings.activityId).label} ·{' '}
-              {data.settings.planType.charAt(0).toUpperCase() + data.settings.planType.slice(1)}
+              {todayPlan.planType.charAt(0).toUpperCase() + todayPlan.planType.slice(1)}
             </small>
           </>
         ) : (

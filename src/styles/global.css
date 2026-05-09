@@ -119,6 +119,23 @@ small { font-size: .8rem; color: var(--text3); }
 .app-header h1 { font-size: 1.25rem; letter-spacing: -.04em; }
 .header-right  { display: flex; gap: 8px; align-items: center; }
 
+.header-brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: none; padding: 4px 6px; margin: 0 -6px;
+  border-radius: var(--radius-sm); cursor: pointer; color: var(--text);
+  font: inherit; transition: background var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.header-brand:hover  { background: var(--surface2); }
+.header-brand:active { transform: scale(.97); }
+.header-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.header-brand h1 { line-height: 1; }
+
+.header-mark {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: block; color: var(--text);
+}
+
 /* ═══════════════════════════════════════════════════════ BOTTOM NAV */
 
 .bottom-nav {
@@ -443,6 +460,28 @@ small { font-size: .8rem; color: var(--text3); }
   border: 2px solid var(--border); flex-shrink: 0; transition: all .15s;
 }
 .plan-level.selected .plan-level-dot { background: var(--accent); border-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════ PLAN SUMMARY ROW */
+
+.plan-summary-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+}
+
+.plan-summary-text {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  min-width: 0;
+}
+
+.plan-summary-label {
+  font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text3);
+}
+
+.plan-summary-value {
+  font-size: .98rem; font-weight: 600; letter-spacing: -.01em;
+  color: var(--text);
+}
 
 /* ═══════════════════════════════════════════════════════ TARGET DISPLAY */
 
