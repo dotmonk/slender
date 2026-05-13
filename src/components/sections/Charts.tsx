@@ -203,7 +203,11 @@ export default function Charts({ chartDays, setChartDays }: Props) {
     },
     scales: {
       ...baseOptions(c).scales,
-      y: { ...baseOptions(c).scales.y, ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v} kg` } },
+      y: {
+        ...baseOptions(c).scales.y,
+        min: Math.max(0, Math.min(...weights.filter((w): w is number => w != null)) - 20),
+        ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v} kg` },
+      },
     },
   };
 
@@ -242,6 +246,7 @@ export default function Charts({ chartDays, setChartDays }: Props) {
       ...baseOptions(c).scales,
       y: {
         ...baseOptions(c).scales.y,
+        min: 0,
         ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v}%` },
       },
     },
