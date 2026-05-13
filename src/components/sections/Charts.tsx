@@ -205,7 +205,7 @@ export default function Charts({ chartDays, setChartDays }: Props) {
       ...baseOptions(c).scales,
       y: {
         ...baseOptions(c).scales.y,
-        min: Math.max(0, Math.min(...weights.filter((w): w is number => w != null)) - 20),
+        min: Math.max(0, Math.min(...weights.filter((w): w is number => w != null)) - 5),
         ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v} kg` },
       },
     },
@@ -246,7 +246,7 @@ export default function Charts({ chartDays, setChartDays }: Props) {
       ...baseOptions(c).scales,
       y: {
         ...baseOptions(c).scales.y,
-        min: 0,
+        min: Math.max(0, ([...bodyFat].reverse().find((v): v is number => v != null) ?? 0) - 5),
         ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v}%` },
       },
     },
