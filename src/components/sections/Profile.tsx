@@ -150,6 +150,12 @@ export default function Profile() {
             id="p-birthdate" className="form-input" type="date"
             value={birthdate} onChange={(e) => setBirthdate(e.target.value)}
           />
+          {birthdate && calcAge(birthdate) != null && (calcAge(birthdate) as number) < 18 && (
+            <div style={{ marginTop: 6, fontSize: '.78rem', color: 'var(--text3)', lineHeight: 1.5 }}>
+              ⚠ Slender is designed for adults 18 and over. Calorie and BMR estimates
+              may not be accurate for your age.
+            </div>
+          )}
         </div>
         <button className="btn btn-primary btn-full" onClick={saveProfile}>
           Save Profile
@@ -165,7 +171,7 @@ export default function Profile() {
             {age != null && <StatBox value={age} label="Age" />}
             {lw  && <StatBox value={lw.weight} label="kg" />}
           </div>
-          <small>Mifflin–St Jeor formula · uses your latest logged weight</small>
+          <small>Mifflin–St Jeor formula · validated for adults 18+ · uses your latest logged weight</small>
         </Card>
       )}
 

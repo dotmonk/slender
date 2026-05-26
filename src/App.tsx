@@ -9,14 +9,20 @@ import Charts from './components/sections/Charts';
 import Profile from './components/sections/Profile';
 import CalorieModal from './components/modals/CalorieModal';
 import FoodModal from './components/modals/FoodModal';
+import DisclaimerModal from './components/modals/DisclaimerModal';
 import type { CalModalState, FoodModalState, Section } from './types';
 import { todayStr } from './utils/dates';
+
+const DISCLAIMER_KEY = 'slender_disclaimer_accepted';
 
 export default function App() {
   const { data } = useApp();
   const [section, setSection]   = useState<Section>('home');
   const [logDate, setLogDate]   = useState(todayStr());
   const [chartDays, setChartDays] = useState<7 | 30 | 90 | 'all'>(7);
+  const [showDisclaimer, setShowDisclaimer] = useState(
+    () => localStorage.getItem(DISCLAIMER_KEY) !== 'true',
+  );
 
   const [calModal, setCalModal] = useState<CalModalState>({
     open: false, editId: null, prefillDate: todayStr(),
@@ -24,6 +30,11 @@ export default function App() {
   const [foodModal, setFoodModal] = useState<FoodModalState>({
     open: false, editId: null,
   });
+
+  function acceptDisclaimer() {
+    localStorage.setItem(DISCLAIMER_KEY, 'true');
+    setShowDisclaimer(false);
+  }
 
   // Apply + persist theme on data change
   useEffect(() => {
@@ -62,6 +73,7 @@ export default function App() {
       </main>
       <BottomNav current={section} onNavigate={setSection} />
 
+      {showDisclaimer && <DisclaimerModal onAccept={acceptDisclaimer} />}
       <CalorieModal
         state={calModal}
         onClose={closeCalModal}

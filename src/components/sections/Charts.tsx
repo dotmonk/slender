@@ -148,6 +148,7 @@ export default function Charts({ chartDays, setChartDays }: Props) {
   // than diving to zero. Days that have an explicit 0-kcal entry are still
   // plotted (sum will be 0).
   const cals    = dates.map((d) => {
+    if (d === today) return null; // exclude current day
     const entries = getCaloriesForDate(data.calLog, d);
     return entries.length === 0 ? null : sumCalories(entries);
   });
@@ -246,8 +247,8 @@ export default function Charts({ chartDays, setChartDays }: Props) {
       ...baseOptions(c).scales,
       y: {
         ...baseOptions(c).scales.y,
-        min: Math.max(0, ([...bodyFat].reverse().find((v): v is number => v != null) ?? 0) - 5),
-        ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v}%` },
+        min: Math.floor(Math.max(0, ([...bodyFat].reverse().find((v): v is number => v != null) ?? 0) - 5)),
+        ticks: { ...baseOptions(c).scales.y.ticks, stepSize: 1, callback: (v: number | string) => `${v}%` },
       },
     },
   };
@@ -318,11 +319,21 @@ export default function Charts({ chartDays, setChartDays }: Props) {
     },
     scales: {
       ...baseOptions(c).scales,
-      y: {
-        ...baseOptions(c).scales.y,
-        beginAtZero: true,
-        ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v}` },
-      },
+      y: (() => {
+        const allCalVals = [
+          ...cals.filter((v): v is number => v != null),
+          ...calMins.filter((v): v is number => v != null),
+          ...calMaxs.filter((v): v is number => v != null),
+        ];
+        const yMin = allCalVals.length ? Math.max(0, Math.min(...allCalVals) - 100) : 0;
+        const yMax = allCalVals.length ? Math.max(...allCalVals) + 100 : undefined;
+        return {
+          ...baseOptions(c).scales.y,
+          min: yMin,
+          max: yMax,
+          ticks: { ...baseOptions(c).scales.y.ticks, callback: (v: number | string) => `${v}` },
+        };
+      })(),
     },
   };
 
