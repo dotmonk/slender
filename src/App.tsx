@@ -19,7 +19,7 @@ export default function App() {
   const { data } = useApp();
   const [section, setSection]   = useState<Section>('home');
   const [logDate, setLogDate]   = useState(todayStr());
-  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 'all'>(7);
+  const [chartDays, setChartDays] = useState<7 | 30 | 90 | 'all'>('all');
   const [showDisclaimer, setShowDisclaimer] = useState(
     () => localStorage.getItem(DISCLAIMER_KEY) !== 'true',
   );
