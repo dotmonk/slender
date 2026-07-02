@@ -14,6 +14,15 @@ export interface Settings {
   activityId: string;
   planType:   PlanType;
   planLevel:  number;
+  /**
+   * Occupational activity. Kept optional so backups/localStorage written
+   * before this feature load unchanged (undefined → desk baseline, +0 kcal).
+   * Work is entered as a weekly average (hours/day × days/week) and averaged
+   * over 7 days when applied to the daily calorie budget.
+   */
+  occupationId?:   string;
+  workHoursPerDay?: number; // hours on a typical work day (default 8)
+  workDaysPerWeek?: number; // work days per week (default 5)
 }
 
 export interface WeightEntry {
@@ -31,6 +40,15 @@ export interface DayPlan {
 export interface ActivityEntry {
   date:       string; // YYYY-MM-DD — date this activity setting starts applying from
   activityId: string;
+}
+
+export interface OccupationEntry {
+  date:         string; // YYYY-MM-DD — date this occupation starts applying from
+  occupationId: string;
+  // Weekly work schedule in effect from this date. Optional so older entries
+  // (job only) fall back to the settings defaults.
+  hoursPerDay?: number;
+  daysPerWeek?: number;
 }
 
 export interface CalorieEntry {
@@ -77,9 +95,26 @@ export interface AppData {
    * date. Mirrors `dayPlans`.
    */
   dayActivities?: ActivityEntry[];
+  /**
+   * Forward-propagating occupation changes. Mirrors `activityLog`; only
+   * added when the user changes their job on the current (or a future) day.
+   */
+  occupationLog?:  OccupationEntry[];
+  /**
+   * Per-date single-day occupations. Created when the user edits the job on
+   * a past day — applies only to that date. Mirrors `dayActivities`.
+   */
+  dayOccupations?: OccupationEntry[];
 }
 
 // ── Constants shape ──────────────────────────────────────────────────────────
+
+export interface Occupation {
+  id:    string;
+  label: string;
+  desc:  string;
+  met:   number; // metabolic equivalent while working; work kcal = (met − 1) × kg × hours
+}
 
 export interface ActivityLevel {
   id:     string;

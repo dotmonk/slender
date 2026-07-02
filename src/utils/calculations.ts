@@ -1,5 +1,5 @@
 import type { AppData, DayPlan, WeightEntry } from '../types';
-import { ACTIVITY_LEVELS, WEIGHT_PLANS } from '../constants';
+import { ACTIVITY_LEVELS, OCCUPATIONS, WEIGHT_PLANS } from '../constants';
 import { calcAge, todayStr } from './dates';
 
 /**
@@ -10,23 +10,30 @@ export function calcBMR(
   weightKg: number | null,
   heightCm: number | null,
   ageYears: number | null,
-  gender:   string | null,
+  gender: string | null,
 ): number | null {
   if (!weightKg || !heightCm || !ageYears || !gender) return null;
   const base = 10 * weightKg + 6.25 * heightCm - 5 * ageYears;
   return Math.round(gender === 'Male' ? base + 5 : base - 161);
 }
 
-/** Calculates TDEE from BMR and an activity multiplier. */
-export function calcTDEE(bmr: number | null, activityFactor: number): number | null {
+/**
+ * Calculates TDEE from BMR and an activity multiplier, plus any additive
+ * occupational calories (kcal burned at work, above resting).
+ */
+export function calcTDEE(
+  bmr: number | null,
+  activityFactor: number,
+  occupationKcal: number = 0,
+): number | null {
   if (!bmr) return null;
-  return Math.round(bmr * activityFactor);
+  return Math.round(bmr * activityFactor) + occupationKcal;
 }
 
 /** Applies the calorie delta for the selected plan level to the TDEE. */
 export function calcTarget(
-  tdee:      number | null,
-  planType:  string,
+  tdee: number | null,
+  planType: string,
   planLevel: number,
 ): number | null {
   if (!tdee) return null;
@@ -108,6 +115,44 @@ export function getActivityIdForDate(data: AppData, dateStr: string): string {
 }
 
 /**
+ * Returns the occupation *and its weekly schedule* in effect on a given date.
+ * Mirrors `getActivityIdForDate`: single-day override → forward-propagating
+ * log → settings defaults (desk / 8h / 5 days for old data). Any schedule
+ * field missing on an entry falls back to the settings default.
+ */
+export function getOccupationForDate(
+  data: AppData,
+  dateStr: string,
+): { occupationId: string; hoursPerDay: number; daysPerWeek: number } {
+  const defHours = data.settings.workHoursPerDay ?? 8;
+  const defDays  = data.settings.workDaysPerWeek ?? 5;
+
+  const dayMatch = (data.dayOccupations ?? []).find((o) => o.date === dateStr);
+  const eligible = (data.occupationLog ?? []).filter((o) => o.date <= dateStr);
+  const entry = dayMatch
+    ?? (eligible.length ? eligible.slice().sort((a, b) => b.date.localeCompare(a.date))[0] : null);
+
+  if (!entry) {
+    return { occupationId: data.settings.occupationId ?? 'desk', hoursPerDay: defHours, daysPerWeek: defDays };
+  }
+  return {
+    occupationId: entry.occupationId,
+    hoursPerDay:  entry.hoursPerDay ?? defHours,
+    daysPerWeek:  entry.daysPerWeek ?? defDays,
+  };
+}
+
+/** Convenience: just the occupation id in effect on a date. */
+export function getOccupationIdForDate(data: AppData, dateStr: string): string {
+  return getOccupationForDate(data, dateStr).occupationId;
+}
+
+/** Weekly work hours = hours/day × days/week. */
+export function weeklyWorkHours(hoursPerDay: number, daysPerWeek: number): number {
+  return hoursPerDay * daysPerWeek;
+}
+
+/**
  * U.S. Army-style body-fat estimate using only weight and abdomen circumference.
  * Returns % body fat rounded to 1 decimal, or null if any input is missing/invalid.
  *
@@ -120,15 +165,15 @@ export function getActivityIdForDate(data: AppData, dateStr: string): string {
  * version trades some accuracy for ease of measurement.
  */
 export function calcBodyFat(
-  weightKg:   number | null | undefined,
-  abdomenCm:  number | null | undefined,
-  gender:     string | null | undefined,
+  weightKg: number | null | undefined,
+  abdomenCm: number | null | undefined,
+  gender: string | null | undefined,
 ): number | null {
   if (!weightKg || !abdomenCm || !gender) return null;
-  if (weightKg <= 0 || abdomenCm <= 0)    return null;
+  if (weightKg <= 0 || abdomenCm <= 0) return null;
   const pct = gender === 'Male'
     ? -26.97 - 0.265 * weightKg + 0.784 * abdomenCm
-    :  -9.15 - 0.033 * weightKg + 0.500 * abdomenCm;
+    : -9.15 - 0.033 * weightKg + 0.500 * abdomenCm;
   if (!isFinite(pct)) return null;
   return Math.round(pct * 10) / 10;
 }
@@ -148,14 +193,41 @@ export function getActivity(activityId: string) {
   return ACTIVITY_LEVELS.find((a) => a.id === activityId) ?? ACTIVITY_LEVELS[2];
 }
 
+/** Returns the Occupation object, defaulting to the desk baseline entry. */
+export function getOccupation(occupationId: string | undefined) {
+  return OCCUPATIONS.find((o) => o.id === occupationId) ?? OCCUPATIONS[0];
+}
+
+/**
+ * Additive daily calories burned at work, relative to a desk-job baseline,
+ * averaged across the whole week:
+ *   kcal/day ≈ (MET − DESK.met) × weightKg × (weeklyHours / 7)
+ * Desk is subtracted (not resting) because a desk job's activity is already
+ * assumed by the standard TDEE activity multiplier — so only work more active
+ * than a desk adds calories, and a desk job adds 0. Weekly hours are spread
+ * over 7 days so the daily calorie budget reflects the weekly average.
+ * Returns 0 when the job is at/below desk, or when weight is unknown.
+ */
+export function calcOccupationKcal(
+  occupationId: string | undefined,
+  weightKg:     number | null | undefined,
+  weeklyHours:  number | null | undefined,
+): number {
+  if (!weightKg || weightKg <= 0) return 0;
+  const delta = getOccupation(occupationId).met - getOccupation('desk').met;
+  if (delta <= 0) return 0;
+  const wk = weeklyHours != null && weeklyHours > 0 ? Math.min(weeklyHours, 168) : 40;
+  return Math.round(delta * weightKg * (wk / 7));
+}
+
 /**
  * Returns the calorie window { min, max } for the selected plan level.
  * For maintenance min === max === TDEE.
  * For lose/gain the window reflects the full band (e.g. 1750–2000 for Mild loss).
  */
 export function calcTargetRange(
-  tdee:      number | null,
-  planType:  string,
+  tdee: number | null,
+  planType: string,
   planLevel: number,
 ): { min: number; max: number } | null {
   if (!tdee) return null;
@@ -184,7 +256,9 @@ export function deriveTDEEForDate(data: AppData, dateStr: string): number | null
   if (!w) return null;
   const age = calcAge(data.profile.birthdate);
   const bmr = calcBMR(w.weight, data.profile.height, age, data.profile.gender);
-  return calcTDEE(bmr, getActivity(getActivityIdForDate(data, dateStr)).factor);
+  const job = getOccupationForDate(data, dateStr);
+  const occ = calcOccupationKcal(job.occupationId, w.weight, weeklyWorkHours(job.hoursPerDay, job.daysPerWeek));
+  return calcTDEE(bmr, getActivity(getActivityIdForDate(data, dateStr)).factor, occ);
 }
 
 /**

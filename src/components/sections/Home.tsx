@@ -6,7 +6,7 @@ import {
   getLatestWeight, getCaloriesForDate, sumCalories,
   deriveTargetRangeForDate, profileComplete,
   calcBMR, calcTDEE, calcTarget, getActivity, calcAge,
-  calcBodyFat, getPlanForDate, getActivityIdForDate,
+  calcBodyFat, getPlanForDate, getActivityIdForDate, getOccupationForDate, calcOccupationKcal, weeklyWorkHours,
 } from '../../utils/calculations';
 import { todayStr, displayDate } from '../../utils/dates';
 import type { Section } from '../../types';
@@ -34,7 +34,9 @@ export default function Home({ onNavigate }: Props) {
   const age = calcAge(data.profile.birthdate);
   const bmr = calcBMR(lw?.weight ?? null, data.profile.height, age, data.profile.gender);
   const activity = getActivity(getActivityIdForDate(data, today));
-  const tdee = calcTDEE(bmr, activity.factor);
+  const job = getOccupationForDate(data, today);
+  const occKcal = calcOccupationKcal(job.occupationId, lw?.weight ?? null, weeklyWorkHours(job.hoursPerDay, job.daysPerWeek));
+  const tdee = calcTDEE(bmr, activity.factor, occKcal);
   const tgt = calcTarget(tdee, todayPlan.planType, todayPlan.planLevel);
 
   const bmi = lw && data.profile.height

@@ -5,14 +5,16 @@ export const STORAGE_KEY = 'slender_data';
 export function defaultData(): AppData {
   return {
     profile:   { height: null, birthdate: null, gender: null },
-    settings:  { theme: 'light', activityId: 'mod', planType: 'maintain', planLevel: 0 } as Settings,
+    settings:  { theme: 'light', activityId: 'mod', planType: 'maintain', planLevel: 0, occupationId: 'desk', workHoursPerDay: 8, workDaysPerWeek: 5 } as Settings,
     weightLog: [],
     calLog:    [],
     foodList:  [],
     planLog:   [],
     dayPlans:  [],
-    activityLog:   [],
-    dayActivities: [],
+    activityLog:    [],
+    dayActivities:  [],
+    occupationLog:  [],
+    dayOccupations: [],
   };
 }
 
@@ -52,7 +54,9 @@ export function isValidBackup(parsed: unknown): parsed is Partial<AppData> {
     'planLog'   in p ||
     'dayPlans'  in p ||
     'activityLog'   in p ||
-    'dayActivities' in p
+    'dayActivities' in p ||
+    'occupationLog'  in p ||
+    'dayOccupations' in p
   );
 }
 

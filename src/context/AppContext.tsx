@@ -5,7 +5,7 @@ import {
   useContext,
   useState,
 } from 'react';
-import type { ActivityEntry, AppData, CalorieEntry, DayPlan, FoodItem, PlanType, Profile, Settings, WeightEntry } from '../types';
+import type { ActivityEntry, AppData, CalorieEntry, DayPlan, FoodItem, OccupationEntry, PlanType, Profile, Settings, WeightEntry } from '../types';
 import { clearStoredData, defaultData, isValidBackup, loadData, saveData } from '../utils/storage';
 import { todayStr } from '../utils/dates';
 import { uid } from '../utils/id';
@@ -26,6 +26,7 @@ interface AppContextType {
   deleteFood: (id: string) => void;
   setPlanForDate: (date: string, planType: PlanType, planLevel: number) => void;
   setActivityForDate: (date: string, activityId: string) => void;
+  setOccupationForDate: (date: string, occupationId: string, hoursPerDay: number, daysPerWeek: number) => void;
   replaceData: (data: AppData) => void;
   resetData: () => void;
 }
@@ -205,6 +206,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  /**
+   * Save an occupation for a date. Mirrors `setActivityForDate`:
+   *   - today/future → `occupationLog` (forward-propagating) + settings default.
+   *   - past         → `dayOccupations` (that one day only).
+   */
+  const setOccupationForDate = useCallback(
+    (date: string, occupationId: string, hoursPerDay: number, daysPerWeek: number) =>
+      update((d) => {
+        const isPast = date < todayStr();
+        const next: OccupationEntry = { date, occupationId, hoursPerDay, daysPerWeek };
+
+        if (isPast) {
+          const list = d.dayOccupations ?? [];
+          const idx  = list.findIndex((o) => o.date === date);
+          const dayOccupations =
+            idx !== -1 ? list.map((o, i) => (i === idx ? next : o)) : [...list, next];
+          return { ...d, dayOccupations };
+        }
+
+        const list = d.occupationLog ?? [];
+        const idx  = list.findIndex((o) => o.date === date);
+        let occupationLog =
+          idx !== -1 ? list.map((o, i) => (i === idx ? next : o)) : [...list, next];
+
+        // First forward change: anchor the old occupation (job + schedule) at the
+        // earliest logged day so already-logged days keep their TDEE instead of
+        // retroactively adopting the new one via the settings fallback.
+        const priorId    = d.settings.occupationId ?? 'desk';
+        const priorHours  = d.settings.workHoursPerDay ?? 8;
+        const priorDays   = d.settings.workDaysPerWeek ?? 5;
+        const changed = priorId !== occupationId || priorHours !== hoursPerDay || priorDays !== daysPerWeek;
+        const hasPriorCalDays = d.calLog.some((e) => e.datetime.slice(0, 10) < date);
+        if (list.length === 0 && hasPriorCalDays && changed) {
+          const priorDates = [
+            ...d.calLog.map((e) => e.datetime.slice(0, 10)),
+            ...d.weightLog.map((w) => w.date),
+          ].filter((ds) => ds < date);
+          const anchorDate = priorDates.slice().sort()[0];
+          occupationLog = [
+            { date: anchorDate, occupationId: priorId, hoursPerDay: priorHours, daysPerWeek: priorDays },
+            ...occupationLog,
+          ];
+        }
+
+        const settings = { ...d.settings, occupationId, workHoursPerDay: hoursPerDay, workDaysPerWeek: daysPerWeek };
+        return { ...d, occupationLog, settings };
+      }),
+    [update],
+  );
+
   const replaceData = useCallback(
     (next: AppData) => {
       saveData(next);
@@ -234,6 +285,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteFood,
         setPlanForDate,
         setActivityForDate,
+        setOccupationForDate,
         replaceData,
         resetData,
       }}

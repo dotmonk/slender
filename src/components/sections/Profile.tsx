@@ -2,28 +2,30 @@ import { useState, useEffect, useRef } from 'react';
 import { useApp, parseBackupJson } from '../../context/AppContext';
 import Card from '../ui/Card';
 import StatBox from '../ui/StatBox';
-import { ACTIVITY_LEVELS, WEIGHT_PLANS } from '../../constants';
+import { ACTIVITY_LEVELS, OCCUPATIONS, WEIGHT_PLANS } from '../../constants';
 import {
   getLatestWeight, calcBMR, calcTDEE, calcTarget, calcTargetRange,
-  getActivity, calcAge, calcBodyFat,
+  getActivity, getOccupation, calcOccupationKcal, weeklyWorkHours, calcAge, calcBodyFat,
 } from '../../utils/calculations';
 import { todayStr } from '../../utils/dates';
 import type { Gender, PlanType } from '../../types';
 
 export default function Profile() {
-  const { data, updateProfile, setPlanForDate, setActivityForDate, replaceData, resetData } = useApp();
-  // setPlanForDate / setActivityForDate update the settings defaults themselves
-  // when called with today, so Profile doesn't touch settings directly here.
+  const { data, updateProfile, setPlanForDate, setActivityForDate, setOccupationForDate, replaceData, resetData } = useApp();
+  // setPlanForDate / setActivityForDate / setOccupationForDate each update the
+  // matching settings defaults themselves when called with today's date.
   const p = data.profile;
   const s = data.settings;
   const fileRef = useRef<HTMLInputElement>(null);
   const [dataMsg, setDataMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   // Local form state (avoids controlled-input lag)
-  const [height,    setHeight]    = useState(p.height?.toString()    ?? '');
-  const [birthdate, setBirthdate] = useState(p.birthdate             ?? '');
-  const [gender,    setGender]    = useState<Gender | ''>(p.gender   ?? '');
-  const [toast,     setToast]     = useState('');
+  const [height, setHeight] = useState(p.height?.toString() ?? '');
+  const [birthdate, setBirthdate] = useState(p.birthdate ?? '');
+  const [gender, setGender] = useState<Gender | ''>(p.gender ?? '');
+  const [hoursPerDayInput, setHoursPerDayInput] = useState(String(s.workHoursPerDay ?? 8));
+  const [daysPerWeekInput, setDaysPerWeekInput] = useState(String(s.workDaysPerWeek ?? 5));
+  const [toast, setToast] = useState('');
 
   // Sync if external data changes (e.g. first load)
   useEffect(() => {
@@ -32,12 +34,22 @@ export default function Profile() {
     setGender(p.gender ?? '');
   }, [p.height, p.birthdate, p.gender]);
 
-  const lw         = getLatestWeight(data.weightLog);
-  const age        = calcAge(birthdate || null);
-  const bmr        = calcBMR(lw?.weight ?? null, Number(height) || null, age, gender || null);
-  const tdee       = calcTDEE(bmr, getActivity(s.activityId).factor);
-  const tgt        = calcTarget(tdee, s.planType, s.planLevel);
-  const tgtRange   = calcTargetRange(tdee, s.planType, s.planLevel);
+  // Keep the schedule inputs in sync when settings change externally (e.g. restore).
+  useEffect(() => { setHoursPerDayInput(String(s.workHoursPerDay ?? 8)); }, [s.workHoursPerDay]);
+  useEffect(() => { setDaysPerWeekInput(String(s.workDaysPerWeek ?? 5)); }, [s.workDaysPerWeek]);
+
+  const lw = getLatestWeight(data.weightLog);
+  const age = calcAge(birthdate || null);
+  const bmr = calcBMR(lw?.weight ?? null, Number(height) || null, age, gender || null);
+  const occId        = s.occupationId ?? 'desk';
+  const hoursPerDay  = s.workHoursPerDay ?? 8;
+  const daysPerWeek  = s.workDaysPerWeek ?? 5;
+  const weeklyHours  = weeklyWorkHours(hoursPerDay, daysPerWeek);
+  const occKcal      = calcOccupationKcal(occId, lw?.weight ?? null, weeklyHours);
+  const occAddsKcal  = getOccupation(occId).met > getOccupation('desk').met;
+  const tdee         = calcTDEE(bmr, getActivity(s.activityId).factor, occKcal);
+  const tgt = calcTarget(tdee, s.planType, s.planLevel);
+  const tgtRange = calcTargetRange(tdee, s.planType, s.planLevel);
   const isMaintain = s.planType === 'maintain';
 
   function saveProfile() {
@@ -55,6 +67,21 @@ export default function Profile() {
     // Today's activity change → activityLog (forward-propagating). setActivityForDate
     // also keeps settings.activityId in sync.
     setActivityForDate(todayStr(), id);
+  }
+  // Job and schedule changes all go through setOccupationForDate(today, …) so
+  // they forward-propagate (and record history) exactly like an activity change.
+  function selectOccupation(id: string) {
+    setOccupationForDate(todayStr(), id, hoursPerDay, daysPerWeek);
+  }
+  function handleHoursPerDay(v: string) {
+    setHoursPerDayInput(v);
+    const n = parseFloat(v);
+    if (!isNaN(n) && n > 0 && n <= 24) setOccupationForDate(todayStr(), occId, n, daysPerWeek);
+  }
+  function handleDaysPerWeek(v: string) {
+    setDaysPerWeekInput(v);
+    const n = parseFloat(v);
+    if (!isNaN(n) && n > 0 && n <= 7) setOccupationForDate(todayStr(), occId, hoursPerDay, n);
   }
   function selectPlanType(type: PlanType) {
     // Today's plan change → planLog (forward-propagating). setPlanForDate
@@ -120,8 +147,8 @@ export default function Profile() {
     showDataMsg('ok', 'All data cleared.');
   }
 
-  const currentPlan   = WEIGHT_PLANS[s.planType];
-  const currentLevel  = currentPlan?.levels[s.planLevel];
+  const currentPlan = WEIGHT_PLANS[s.planType];
+  const currentLevel = currentPlan?.levels[s.planLevel];
 
   return (
     <div className="section">
@@ -173,7 +200,7 @@ export default function Profile() {
           <div className="stat-row">
             <StatBox value={bmr} label="kcal / day" />
             {age != null && <StatBox value={age} label="Age" />}
-            {lw  && <StatBox value={lw.weight} label="kg" />}
+            {lw && <StatBox value={lw.weight} label="kg" />}
           </div>
           <small>Mifflin–St Jeor formula · validated for adults 18+ · uses your latest logged weight</small>
         </Card>
@@ -216,6 +243,68 @@ export default function Profile() {
             </label>
           ))}
         </div>
+        <div style={{ fontSize: '.78rem', color: 'var(--text3)', marginTop: 10, lineHeight: 1.5 }}>
+          Exercise and daily movement outside of work — set your job separately below.
+        </div>
+      </Card>
+
+      {/* ── Occupation ── */}
+      <Card title="Work / Job">
+        <div style={{ fontSize: '.8rem', color: 'var(--text3)', marginBottom: 10, lineHeight: 1.5 }}>
+          Calories burned on the job, added on top of your activity level.
+        </div>
+        <div className="activity-grid">
+          {OCCUPATIONS.map((o) => (
+            <label
+              key={o.id}
+              className={`activity-option${occId === o.id ? ' selected' : ''}`}
+              onClick={() => selectOccupation(o.id)}
+            >
+              <div className="activity-dot" />
+              <div>
+                <div className="activity-label">{o.label}</div>
+                <div className="activity-desc">{o.desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {occAddsKcal ? (
+          <>
+            <div className="form-row" style={{ marginTop: 14 }}>
+              <div className="form-group" style={{ marginBottom: 8 }}>
+                <label className="form-label" htmlFor="p-workhpd">Hours per day</label>
+                <input
+                  id="p-workhpd" className="form-input" type="number"
+                  min={0} max={24} step={0.5} inputMode="decimal"
+                  value={hoursPerDayInput}
+                  onChange={(e) => handleHoursPerDay(e.target.value)}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 8 }}>
+                <label className="form-label" htmlFor="p-workdpw">Days per week</label>
+                <input
+                  id="p-workdpw" className="form-input" type="number"
+                  min={0} max={7} step={1} inputMode="numeric"
+                  value={daysPerWeekInput}
+                  onChange={(e) => handleDaysPerWeek(e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ fontSize: '.9rem', fontWeight: 600, color: 'var(--text2)' }}>
+              {lw
+                ? `${weeklyHours} h/week · +${occKcal} kcal/day from work`
+                : `${weeklyHours} h/week · log a weight to estimate work calories.`}
+            </div>
+            <div style={{ fontSize: '.78rem', color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+              Averaged across the week, so the daily budget stays the same every day.
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: '.8rem', color: 'var(--text3)', marginTop: 12, lineHeight: 1.5 }}>
+            A desk job is the baseline — it's already included in your activity level, so it adds no extra calories.
+          </div>
+        )}
       </Card>
 
       {/* ── TDEE ── */}
@@ -224,7 +313,10 @@ export default function Profile() {
           <div className="stat-row">
             <StatBox value={tdee} label="kcal / day" />
           </div>
-          <small>{getActivity(s.activityId).label} — calories to maintain current weight</small>
+          <small>
+            {getActivity(s.activityId).label}
+            {occKcal > 0 ? ` · +${occKcal} kcal work` : ''} — calories to maintain current weight
+          </small>
         </Card>
       )}
 
