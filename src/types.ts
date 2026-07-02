@@ -28,6 +28,11 @@ export interface DayPlan {
   planLevel: number;
 }
 
+export interface ActivityEntry {
+  date:       string; // YYYY-MM-DD — date this activity setting starts applying from
+  activityId: string;
+}
+
 export interface CalorieEntry {
   id:       string;
   datetime: string; // ISO-8601
@@ -59,6 +64,19 @@ export interface AppData {
    * affects any other date's lookup.
    */
   dayPlans:  DayPlan[];
+  /**
+   * Forward-propagating activity-level changes. An entry at date D means
+   * "from D onward (until the next activityLog entry), this is the
+   * activity level." Mirrors `planLog`; only added when the user changes
+   * activity on the current (or a future) day.
+   */
+  activityLog?:   ActivityEntry[];
+  /**
+   * Per-date single-day activity levels. Created when the user edits the
+   * activity level on a past day — that change applies only to that one
+   * date. Mirrors `dayPlans`.
+   */
+  dayActivities?: ActivityEntry[];
 }
 
 // ── Constants shape ──────────────────────────────────────────────────────────

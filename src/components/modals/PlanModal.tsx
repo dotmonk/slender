@@ -1,6 +1,6 @@
 import { useApp } from '../../context/AppContext';
-import { WEIGHT_PLANS } from '../../constants';
-import { getPlanForDate } from '../../utils/calculations';
+import { ACTIVITY_LEVELS, WEIGHT_PLANS } from '../../constants';
+import { getPlanForDate, getActivityIdForDate } from '../../utils/calculations';
 import { displayDate, todayStr } from '../../utils/dates';
 import type { PlanType } from '../../types';
 
@@ -11,12 +11,13 @@ interface Props {
 }
 
 export default function PlanModal({ open, date, onClose }: Props) {
-  const { data, setPlanForDate } = useApp();
+  const { data, setPlanForDate, setActivityForDate } = useApp();
 
   if (!open) return null;
 
   const plan        = getPlanForDate(data, date);
   const currentPlan = WEIGHT_PLANS[plan.planType];
+  const activityId  = getActivityIdForDate(data, date);
   const isPast      = date < todayStr();
 
   function selectType(t: PlanType) {
@@ -25,13 +26,16 @@ export default function PlanModal({ open, date, onClose }: Props) {
   function selectLevel(i: number) {
     setPlanForDate(date, plan.planType as PlanType, i);
   }
+  function selectActivity(id: string) {
+    setActivityForDate(date, id);
+  }
 
   return (
     <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal">
         <div className="modal-header">
           <div>
-            <div className="modal-title">Change plan</div>
+            <div className="modal-title">Change plan &amp; activity</div>
             <div style={{ fontSize: '.78rem', color: 'var(--text3)', marginTop: 2 }}>
               For {displayDate(date)}
             </div>
@@ -77,6 +81,25 @@ export default function PlanModal({ open, date, onClose }: Props) {
                 </div>
               )}
             </div>
+          ))}
+        </div>
+
+        <div style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text2)', marginTop: 18, marginBottom: 8 }}>
+          Activity level
+        </div>
+        <div className="activity-grid">
+          {ACTIVITY_LEVELS.map((a) => (
+            <label
+              key={a.id}
+              className={`activity-option${activityId === a.id ? ' selected' : ''}`}
+              onClick={() => selectActivity(a.id)}
+            >
+              <div className="activity-dot" />
+              <div>
+                <div className="activity-label">{a.label}</div>
+                <div className="activity-desc">{a.desc} · ×{a.factor}</div>
+              </div>
+            </label>
           ))}
         </div>
 

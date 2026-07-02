@@ -6,7 +6,8 @@ import EmptyState from '../ui/EmptyState';
 import PlanModal from '../modals/PlanModal';
 import {
   getWeightForDate, getCaloriesForDate, sumCalories,
-  deriveTargetRangeForDate, getPlanForDate, calcBodyFat,
+  deriveTargetRangeForDate, getPlanForDate, getActivityIdForDate,
+  getActivity, calcBodyFat,
 } from '../../utils/calculations';
 import { fmtTime } from '../../utils/dates';
 import { WEIGHT_PLANS } from '../../constants';
@@ -69,6 +70,9 @@ export default function Log({ logDate, setLogDate, onOpenCalModal }: Props) {
     if (!lvl) return p.label;
     return p.label === 'Maintain' ? 'Maintain weight' : `${lvl.label} ${p.label.toLowerCase()}`;
   })();
+
+  // Activity level in effect for this date.
+  const activityLabel = getActivity(getActivityIdForDate(data, logDate)).label;
 
   function handleWeightSave() {
     const val = parseFloat(weightInput);
@@ -207,6 +211,8 @@ export default function Log({ logDate, setLogDate, onOpenCalModal }: Props) {
           <div className="plan-summary-text">
             <span className="plan-summary-label">Plan</span>
             <span className="plan-summary-value">{planSummary}</span>
+            <span className="plan-summary-label">Activity</span>
+            <span className="plan-summary-value">{activityLabel}</span>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={() => setPlanModalOpen(true)}>
             Change

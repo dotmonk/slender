@@ -343,10 +343,10 @@ export default function Charts({ chartDays, setChartDays }: Props) {
       return 'Solid = consumed · Dashed = daily target.';
     }
     if (anyMaintainDay && anyWindowDay) {
-      return 'Solid = consumed · Dashed lines = your daily window (or target on maintain days). Bounds shift with logged weight and any per-day plan changes.';
+      return 'Solid = consumed · Dashed lines = your daily window (or target on maintain days). Bounds shift with logged weight and any per-day plan or activity changes.';
     }
     if (anyWindowDay) {
-      return 'Solid = consumed · Dashed = lower & upper of your daily window. Bounds shift with logged weight and any per-day plan changes.';
+      return 'Solid = consumed · Dashed = lower & upper of your daily window. Bounds shift with logged weight and any per-day plan or activity changes.';
     }
     return null;
   }

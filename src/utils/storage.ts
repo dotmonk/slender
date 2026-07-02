@@ -11,6 +11,8 @@ export function defaultData(): AppData {
     foodList:  [],
     planLog:   [],
     dayPlans:  [],
+    activityLog:   [],
+    dayActivities: [],
   };
 }
 
@@ -48,7 +50,9 @@ export function isValidBackup(parsed: unknown): parsed is Partial<AppData> {
     'calLog'    in p ||
     'foodList'  in p ||
     'planLog'   in p ||
-    'dayPlans'  in p
+    'dayPlans'  in p ||
+    'activityLog'   in p ||
+    'dayActivities' in p
   );
 }
 

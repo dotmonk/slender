@@ -5,7 +5,7 @@ import {
   useContext,
   useState,
 } from 'react';
-import type { AppData, CalorieEntry, DayPlan, FoodItem, PlanType, Profile, Settings, WeightEntry } from '../types';
+import type { ActivityEntry, AppData, CalorieEntry, DayPlan, FoodItem, PlanType, Profile, Settings, WeightEntry } from '../types';
 import { clearStoredData, defaultData, isValidBackup, loadData, saveData } from '../utils/storage';
 import { todayStr } from '../utils/dates';
 import { uid } from '../utils/id';
@@ -25,6 +25,7 @@ interface AppContextType {
   updateFood: (food: FoodItem) => void;
   deleteFood: (id: string) => void;
   setPlanForDate: (date: string, planType: PlanType, planLevel: number) => void;
+  setActivityForDate: (date: string, activityId: string) => void;
   replaceData: (data: AppData) => void;
   resetData: () => void;
 }
@@ -151,6 +152,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  /**
+   * Save an activity level for a date. Mirrors `setPlanForDate`:
+   *
+   *   - If `date` is today (or in the future), append/upsert it to
+   *     `activityLog` so today + future days inherit it. Also update the
+   *     `settings` default so the Profile/Home UI stays in sync.
+   *   - If `date` is in the past, append/upsert it to `dayActivities`
+   *     only — it applies to that one day and never propagates.
+   */
+  const setActivityForDate = useCallback(
+    (date: string, activityId: string) =>
+      update((d) => {
+        const isPast = date < todayStr();
+        const next: ActivityEntry = { date, activityId };
+
+        if (isPast) {
+          const list = d.dayActivities ?? [];
+          const idx  = list.findIndex((a) => a.date === date);
+          const dayActivities =
+            idx !== -1 ? list.map((a, i) => (i === idx ? next : a)) : [...list, next];
+          return { ...d, dayActivities };
+        }
+
+        const list = d.activityLog ?? [];
+        const idx  = list.findIndex((a) => a.date === date);
+        let activityLog =
+          idx !== -1 ? list.map((a, i) => (i === idx ? next : a)) : [...list, next];
+
+        // First-ever forward activity change: until now every past day resolved
+        // to the single `settings.activityId`. Adding this entry would leave
+        // already-logged earlier days falling back to the *new* level (they have
+        // no eligible activityLog entry), retroactively rewriting their TDEE /
+        // calorie windows. To keep history intact, anchor the *old* profile
+        // activity level at the earliest previously-logged day so those days
+        // stay on the level that was actually in effect then.
+        const priorId = d.settings.activityId;
+        const hasPriorCalDays = d.calLog.some((e) => e.datetime.slice(0, 10) < date);
+        if (list.length === 0 && hasPriorCalDays && priorId !== activityId) {
+          const priorDates = [
+            ...d.calLog.map((e) => e.datetime.slice(0, 10)),
+            ...d.weightLog.map((w) => w.date),
+          ].filter((ds) => ds < date);
+          const anchorDate = priorDates.slice().sort()[0];
+          activityLog = [{ date: anchorDate, activityId: priorId }, ...activityLog];
+        }
+
+        // Keep the settings default in sync so Profile/Home reflect today's pick.
+        const settings = { ...d.settings, activityId };
+        return { ...d, activityLog, settings };
+      }),
+    [update],
+  );
+
   const replaceData = useCallback(
     (next: AppData) => {
       saveData(next);
@@ -179,6 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateFood,
         deleteFood,
         setPlanForDate,
+        setActivityForDate,
         replaceData,
         resetData,
       }}

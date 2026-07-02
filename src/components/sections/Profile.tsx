@@ -11,9 +11,9 @@ import { todayStr } from '../../utils/dates';
 import type { Gender, PlanType } from '../../types';
 
 export default function Profile() {
-  const { data, updateProfile, updateSettings, setPlanForDate, replaceData, resetData } = useApp();
-  // setPlanForDate updates settings.planType/level itself when called with today,
-  // so Profile only needs updateSettings for activity/theme changes.
+  const { data, updateProfile, setPlanForDate, setActivityForDate, replaceData, resetData } = useApp();
+  // setPlanForDate / setActivityForDate update the settings defaults themselves
+  // when called with today, so Profile doesn't touch settings directly here.
   const p = data.profile;
   const s = data.settings;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -51,7 +51,11 @@ export default function Profile() {
     setTimeout(() => setToast(''), 2500);
   }
 
-  function selectActivity(id: string) { updateSettings({ activityId: id }); }
+  function selectActivity(id: string) {
+    // Today's activity change → activityLog (forward-propagating). setActivityForDate
+    // also keeps settings.activityId in sync.
+    setActivityForDate(todayStr(), id);
+  }
   function selectPlanType(type: PlanType) {
     // Today's plan change → planLog (forward-propagating). setPlanForDate
     // also keeps settings.planType/level in sync.

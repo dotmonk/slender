@@ -84,6 +84,30 @@ export function getPlanForDate(
 }
 
 /**
+ * Returns the activity-level id in effect on a given date.
+ *
+ *   1. If the date has its own single-day entry in `dayActivities`, use it.
+ *   2. Else find the most recent forward-propagating entry in `activityLog`
+ *      with `entry.date <= queryDate` and use it.
+ *   3. Else fall back to the current default in `settings.activityId`.
+ *
+ * Mirrors `getPlanForDate` so activity levels can change over time the same
+ * way plans do, while old data (no activity history) transparently falls
+ * back to the single `settings.activityId`.
+ */
+export function getActivityIdForDate(data: AppData, dateStr: string): string {
+  const dayMatch = (data.dayActivities ?? []).find((a) => a.date === dateStr);
+  if (dayMatch) return dayMatch.activityId;
+
+  const eligible = (data.activityLog ?? []).filter((a) => a.date <= dateStr);
+  if (eligible.length) {
+    const latest = eligible.slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+    return latest.activityId;
+  }
+  return data.settings.activityId;
+}
+
+/**
  * U.S. Army-style body-fat estimate using only weight and abdomen circumference.
  * Returns % body fat rounded to 1 decimal, or null if any input is missing/invalid.
  *
@@ -160,7 +184,7 @@ export function deriveTDEEForDate(data: AppData, dateStr: string): number | null
   if (!w) return null;
   const age = calcAge(data.profile.birthdate);
   const bmr = calcBMR(w.weight, data.profile.height, age, data.profile.gender);
-  return calcTDEE(bmr, getActivity(data.settings.activityId).factor);
+  return calcTDEE(bmr, getActivity(getActivityIdForDate(data, dateStr)).factor);
 }
 
 /**

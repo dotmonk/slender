@@ -6,7 +6,7 @@ import {
   getLatestWeight, getCaloriesForDate, sumCalories,
   deriveTargetRangeForDate, profileComplete,
   calcBMR, calcTDEE, calcTarget, getActivity, calcAge,
-  calcBodyFat, getPlanForDate,
+  calcBodyFat, getPlanForDate, getActivityIdForDate,
 } from '../../utils/calculations';
 import { todayStr, displayDate } from '../../utils/dates';
 import type { Section } from '../../types';
@@ -34,7 +34,8 @@ export default function Home({ onNavigate }: Props) {
   const lw   = getLatestWeight(data.weightLog);
   const age  = calcAge(data.profile.birthdate);
   const bmr  = calcBMR(lw?.weight ?? null, data.profile.height, age, data.profile.gender);
-  const tdee = calcTDEE(bmr, getActivity(data.settings.activityId).factor);
+  const activity = getActivity(getActivityIdForDate(data, today));
+  const tdee = calcTDEE(bmr, activity.factor);
   const tgt  = calcTarget(tdee, todayPlan.planType, todayPlan.planLevel);
 
   const bmi = lw && data.profile.height
@@ -118,7 +119,7 @@ export default function Home({ onNavigate }: Props) {
               {tgt  != null && <StatBox value={tgt}  label="Midpoint" />}
             </div>
             <small>
-              {getActivity(data.settings.activityId).label} ·{' '}
+              {activity.label} ·{' '}
               {todayPlan.planType.charAt(0).toUpperCase() + todayPlan.planType.slice(1)}
             </small>
           </>
