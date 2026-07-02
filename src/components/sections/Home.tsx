@@ -12,36 +12,35 @@ import { todayStr, displayDate } from '../../utils/dates';
 import type { Section } from '../../types';
 
 interface Props {
-  onNavigate:     (s: Section) => void;
+  onNavigate: (s: Section) => void;
   onOpenCalModal: () => void;
 }
 
 export default function Home({ onNavigate }: Props) {
   const { data } = useApp();
 
-  const today        = todayStr();
+  const today = todayStr();
   const todayEntries = getCaloriesForDate(data.calLog, today);
-  const consumed     = sumCalories(todayEntries);
-  const range        = deriveTargetRangeForDate(data, today);
-  const todayPlan    = getPlanForDate(data, today);
-  const isMaintain   = todayPlan.planType === 'maintain';
+  const consumed = sumCalories(todayEntries);
+  const range = deriveTargetRangeForDate(data, today);
+  const todayPlan = getPlanForDate(data, today);
+  const isMaintain = todayPlan.planType === 'maintain';
 
   // Progress bar uses upper bound so the bar fills toward the max of the window
   const progressMax = range?.max ?? 0;
-  const pct         = progressMax > 0 ? Math.min(Math.round((consumed / progressMax) * 100), 100) : 0;
 
   // For BMR/TDEE budget card — uses latest weight (which now drives the window)
-  const lw   = getLatestWeight(data.weightLog);
-  const age  = calcAge(data.profile.birthdate);
-  const bmr  = calcBMR(lw?.weight ?? null, data.profile.height, age, data.profile.gender);
+  const lw = getLatestWeight(data.weightLog);
+  const age = calcAge(data.profile.birthdate);
+  const bmr = calcBMR(lw?.weight ?? null, data.profile.height, age, data.profile.gender);
   const activity = getActivity(getActivityIdForDate(data, today));
   const tdee = calcTDEE(bmr, activity.factor);
-  const tgt  = calcTarget(tdee, todayPlan.planType, todayPlan.planLevel);
+  const tgt = calcTarget(tdee, todayPlan.planType, todayPlan.planLevel);
 
   const bmi = lw && data.profile.height
     ? (lw.weight / Math.pow(data.profile.height / 100, 2)).toFixed(1)
     : null;
-  const bf  = lw ? calcBodyFat(lw.weight, lw.abdomen, data.profile.gender) : null;
+  const bf = lw ? calcBodyFat(lw.weight, lw.abdomen, data.profile.gender) : null;
 
   // Calorie summary label
   function calSummaryLabel() {
@@ -51,17 +50,7 @@ export default function Home({ onNavigate }: Props) {
   }
   const summaryLabel = calSummaryLabel();
 
-  // Remaining label
-  function remainingLabel() {
-    if (!range) return null;
-    const rem = range.max - consumed;
-    if (isMaintain) return rem >= 0 ? `${rem} remaining` : `${Math.abs(rem)} over`;
-    // For lose/gain show position within window
-    if (consumed < range.min) return `${range.min - consumed} below window`;
-    if (consumed > range.max) return `${consumed - range.max} above window`;
-    return 'In window ✓';
-  }
-
+  const remaining = range !== null ? range.max - consumed : 0;
   return (
     <div className="section">
       {!profileComplete(data) && (
@@ -76,10 +65,21 @@ export default function Home({ onNavigate }: Props) {
       <Card title="Calories Today">
         <div className="stat-row">
           <StatBox value={consumed} label="Consumed" />
-          {range && isMaintain  && <StatBox value={range.max} label="Target" />}
+          {range && isMaintain && <StatBox value={range.max} label="Target" />}
           {range && !isMaintain && <StatBox value={`${range.min}–${range.max}`} label="Window" />}
-          {range && <StatBox value={remainingLabel() ?? '—'} label={isMaintain ? 'Remaining' : 'Status'} />}
         </div>
+        {range && (
+          <div className="stat-row">
+            {/* MAINTAINENCE */}
+            {isMaintain && remaining >= 0 && <StatBox value={remaining} label="remaining" />}
+            {isMaintain && remaining < 0 && <StatBox value={Math.abs(remaining)} label="over" />}
+            {/* NON MAINTAINENCE */}
+            {!isMaintain && consumed < range.min && <StatBox value={range.min - consumed} label="below window" />}
+            {!isMaintain && consumed >= range.min && consumed <= range.max && <StatBox value={consumed - range.min} label="in window ✓" />}
+            {!isMaintain && consumed <= range.max && <StatBox value={range.max - consumed} label="to max window" />}
+            {!isMaintain && consumed > range.max && <StatBox value={consumed - range.max} label="above window" />}
+          </div>
+        )}
         <ProgressBar value={consumed} max={progressMax} />
         <div className="cal-summary">
           <span>{todayEntries.length} entries</span>
@@ -102,7 +102,7 @@ export default function Home({ onNavigate }: Props) {
           <p style={{ color: 'var(--text3)', fontSize: '.88rem' }}>
             No weight logged yet.{' '}
             <a style={{ color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}
-               onClick={() => onNavigate('log')}>
+              onClick={() => onNavigate('log')}>
               Log weight →
             </a>
           </p>
@@ -114,9 +114,9 @@ export default function Home({ onNavigate }: Props) {
         {profileComplete(data) && lw ? (
           <>
             <div className="stat-row">
-              {bmr  != null && <StatBox value={bmr}  label="BMR"  />}
+              {bmr != null && <StatBox value={bmr} label="BMR" />}
               {tdee != null && <StatBox value={tdee} label="TDEE" />}
-              {tgt  != null && <StatBox value={tgt}  label="Midpoint" />}
+              {tgt != null && <StatBox value={tgt} label="Midpoint" />}
             </div>
             <small>
               {activity.label} ·{' '}
