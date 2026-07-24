@@ -1,6 +1,6 @@
 import type { AppData, DayPlan, WeightEntry } from '../types';
 import { ACTIVITY_LEVELS, OCCUPATIONS, WEIGHT_PLANS } from '../constants';
-import { calcAge, todayStr } from './dates';
+import { calcAge, localDateStr, todayStr } from './dates';
 
 /**
  * Mifflin–St Jeor BMR formula.
@@ -178,9 +178,9 @@ export function calcBodyFat(
   return Math.round(pct * 10) / 10;
 }
 
-/** Returns all calorie entries for a specific date (YYYY-MM-DD). */
+/** Returns all calorie entries for a specific local calendar date (YYYY-MM-DD). */
 export function getCaloriesForDate(calLog: AppData['calLog'], dateStr: string) {
-  return calLog.filter((e) => e.datetime.startsWith(dateStr));
+  return calLog.filter((e) => localDateStr(e.datetime) === dateStr);
 }
 
 /** Sums the kcal values of an array of calorie entries. */

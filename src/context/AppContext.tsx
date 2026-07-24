@@ -7,7 +7,7 @@ import {
 } from 'react';
 import type { ActivityEntry, AppData, CalorieEntry, DayPlan, FoodItem, OccupationEntry, PlanType, Profile, Settings, WeightEntry } from '../types';
 import { clearStoredData, defaultData, isValidBackup, loadData, saveData } from '../utils/storage';
-import { todayStr } from '../utils/dates';
+import { localDateStr, todayStr } from '../utils/dates';
 import { uid } from '../utils/id';
 
 // ── Context shape ─────────────────────────────────────────────────────────────
@@ -189,10 +189,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // activity level at the earliest previously-logged day so those days
         // stay on the level that was actually in effect then.
         const priorId = d.settings.activityId;
-        const hasPriorCalDays = d.calLog.some((e) => e.datetime.slice(0, 10) < date);
+        const hasPriorCalDays = d.calLog.some((e) => localDateStr(e.datetime) < date);
         if (list.length === 0 && hasPriorCalDays && priorId !== activityId) {
           const priorDates = [
-            ...d.calLog.map((e) => e.datetime.slice(0, 10)),
+            ...d.calLog.map((e) => localDateStr(e.datetime)),
             ...d.weightLog.map((w) => w.date),
           ].filter((ds) => ds < date);
           const anchorDate = priorDates.slice().sort()[0];
@@ -237,10 +237,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const priorHours  = d.settings.workHoursPerDay ?? 8;
         const priorDays   = d.settings.workDaysPerWeek ?? 5;
         const changed = priorId !== occupationId || priorHours !== hoursPerDay || priorDays !== daysPerWeek;
-        const hasPriorCalDays = d.calLog.some((e) => e.datetime.slice(0, 10) < date);
+        const hasPriorCalDays = d.calLog.some((e) => localDateStr(e.datetime) < date);
         if (list.length === 0 && hasPriorCalDays && changed) {
           const priorDates = [
-            ...d.calLog.map((e) => e.datetime.slice(0, 10)),
+            ...d.calLog.map((e) => localDateStr(e.datetime)),
             ...d.weightLog.map((w) => w.date),
           ].filter((ds) => ds < date);
           const anchorDate = priorDates.slice().sort()[0];

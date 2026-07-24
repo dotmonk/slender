@@ -9,7 +9,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import { useApp } from '../../context/AppContext';
 import Card from '../ui/Card';
-import { todayStr, addDays, shortDate, buildDateRangeFromTo } from '../../utils/dates';
+import { todayStr, addDays, shortDate, buildDateRangeFromTo, localDateStr } from '../../utils/dates';
 import {
   getWeightForDate, getCaloriesForDate, sumCalories,
   deriveTargetRangeForDate, getPlanForDate, calcBodyFat,
@@ -109,7 +109,7 @@ export default function Charts({ chartDays, setChartDays }: Props) {
   // Earliest data point across both logs
   const earliestDate = getEarliestDate(
     data.weightLog.map((w) => w.date),
-    data.calLog.map((e) => e.datetime.slice(0, 10)),
+    data.calLog.map((e) => localDateStr(e.datetime)),
   );
 
   // Resolve the date window

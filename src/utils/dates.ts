@@ -11,6 +11,11 @@ export function fmtDate(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
+/** Local calendar date (YYYY-MM-DD) for an ISO datetime string. */
+export function localDateStr(isoStr: string): string {
+  return fmtDate(new Date(isoStr));
+}
+
 /** Adds (or subtracts) n days from a YYYY-MM-DD string. */
 export function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T12:00:00');

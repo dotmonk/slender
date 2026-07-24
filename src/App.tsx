@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from './context/AppContext';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -19,6 +19,8 @@ export default function App() {
   const { data } = useApp();
   const [section, setSection]   = useState<Section>('home');
   const [logDate, setLogDate]   = useState(todayStr());
+  // When true, logDate tracks the calendar day (advances past midnight).
+  const followTodayRef = useRef(true);
   const [chartDays, setChartDays] = useState<7 | 30 | 90 | 'all'>('all');
   const [showDisclaimer, setShowDisclaimer] = useState(
     () => localStorage.getItem(DISCLAIMER_KEY) !== 'true',
@@ -35,6 +37,26 @@ export default function App() {
     localStorage.setItem(DISCLAIMER_KEY, 'true');
     setShowDisclaimer(false);
   }
+
+  function handleSetLogDate(d: string) {
+    followTodayRef.current = d === todayStr();
+    setLogDate(d);
+  }
+
+  // Keep Log on "today" when the calendar day rolls over while the app stays open.
+  useEffect(() => {
+    function syncToday() {
+      if (!followTodayRef.current) return;
+      const today = todayStr();
+      setLogDate((prev) => (prev === today ? prev : today));
+    }
+    const id = setInterval(syncToday, 60_000);
+    document.addEventListener('visibilitychange', syncToday);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', syncToday);
+    };
+  }, []);
 
   // Apply + persist theme on data change
   useEffect(() => {
@@ -58,7 +80,7 @@ export default function App() {
   function renderSection() {
     switch (section) {
       case 'home':    return <Home onNavigate={setSection} onOpenCalModal={() => openCalModal(null, todayStr())} />;
-      case 'log':     return <Log logDate={logDate} setLogDate={setLogDate} onOpenCalModal={openCalModal} />;
+      case 'log':     return <Log logDate={logDate} setLogDate={handleSetLogDate} onOpenCalModal={openCalModal} />;
       case 'foods':   return <Foods onOpenFoodModal={openFoodModal} />;
       case 'charts':  return <Charts chartDays={chartDays} setChartDays={setChartDays} />;
       case 'profile': return <Profile />;
