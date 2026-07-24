@@ -43,19 +43,16 @@ export default function App() {
     setLogDate(d);
   }
 
-  // Keep Log on "today" when the calendar day rolls over while the app stays open.
+  // Keep Log on "today" when the user returns after the calendar day has changed.
   useEffect(() => {
     function syncToday() {
+      if (document.visibilityState !== 'visible') return;
       if (!followTodayRef.current) return;
       const today = todayStr();
       setLogDate((prev) => (prev === today ? prev : today));
     }
-    const id = setInterval(syncToday, 60_000);
     document.addEventListener('visibilitychange', syncToday);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', syncToday);
-    };
+    return () => document.removeEventListener('visibilitychange', syncToday);
   }, []);
 
   // Apply + persist theme on data change

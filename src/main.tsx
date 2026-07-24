@@ -19,11 +19,19 @@ if ('serviceWorker' in navigator) {
         window.location.reload();
       }
     });
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register(`${import.meta.env.BASE_URL}sw.js`, { updateViaCache: 'none' })
-        .catch((err) => console.warn('[SW] registration failed:', err));
-    });
+
+    navigator.serviceWorker
+      .register(`${import.meta.env.BASE_URL}sw.js`, { updateViaCache: 'none' })
+      .then((reg) => {
+        // Check for a new SW when the user returns to the PWA.
+        // If one is found, skipWaiting + clients.claim in sw.js activate it,
+        // then controllerchange above reloads the page.
+        const checkForUpdate = () => {
+          if (document.visibilityState === 'visible') reg.update();
+        };
+        document.addEventListener('visibilitychange', checkForUpdate);
+      })
+      .catch((err) => console.warn('[SW] registration failed:', err));
   } else {
     // Dev mode — clean up any SW + cache leftover from a prod visit.
     navigator.serviceWorker.getRegistrations()
