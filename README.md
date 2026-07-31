@@ -1,6 +1,6 @@
 # Slender
 
-A lightweight, privacy-first weight and calorie tracker that runs entirely in your browser. No accounts, no server — all data lives in `localStorage` on your device.
+A lightweight, privacy-first weight and calorie tracker that runs entirely in your browser. No accounts, no server — all data lives in IndexedDB on your device.
 
 Installable as a Progressive Web App (PWA) on iPhone and Android. Automatically updated on every push to `main` via GitHub Actions → GitHub Pages.
 
@@ -29,7 +29,7 @@ Installable as a Progressive Web App (PWA) on iPhone and Android. Automatically 
 | Build | Vite 5 |
 | Charts | Chart.js 4 + react-chartjs-2 |
 | Styles | Plain CSS with custom properties |
-| Storage | `localStorage` |
+| Storage | IndexedDB |
 | Deploy | GitHub Actions → GitHub Pages |
 | PWA | `public/sw.js` + `public/manifest.json` |
 
@@ -79,7 +79,7 @@ To enable GitHub Pages for the first time: **Settings → Pages → Source → G
     ├── utils/
     │   ├── calculations.ts  # BMR, TDEE, target calories, helpers
     │   ├── dates.ts         # Date formatting and range utilities
-    │   ├── storage.ts       # localStorage read / write
+    │   ├── storage.ts       # IndexedDB read / write (+ one-time localStorage migration)
     │   └── id.ts            # UID generator
     ├── styles/
     │   └── global.css       # CSS custom properties, theming, all component styles
@@ -95,7 +95,7 @@ To enable GitHub Pages for the first time: **Settings → Pages → Source → G
 
 ## Data model
 
-Everything is stored under the key `slender_data` in `localStorage` as JSON:
+Everything is stored in IndexedDB (`slender` / object store `kv`) under the key `appData` as a single JSON-compatible object:
 
 ```ts
 {
@@ -106,3 +106,5 @@ Everything is stored under the key `slender_data` in `localStorage` as JSON:
   foodList:  [{ id, desc, kcal }]
 }
 ```
+
+On first launch after upgrading, any legacy `localStorage` payload under `slender_data` is migrated into IndexedDB automatically and then removed.
