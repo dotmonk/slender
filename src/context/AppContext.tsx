@@ -3,10 +3,11 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
 } from 'react';
 import type { ActivityEntry, AppData, CalorieEntry, DayPlan, FoodItem, OccupationEntry, PlanType, Profile, Settings, WeightEntry } from '../types';
-import { clearStoredData, defaultData, isValidBackup, loadData, saveData } from '../utils/storage';
+import { clearStoredData, defaultData, isValidBackup, loadData, normalizeData, saveData } from '../utils/storage';
 import { localDateStr, todayStr } from '../utils/dates';
 import { uid } from '../utils/id';
 
@@ -36,13 +37,22 @@ const AppContext = createContext<AppContextType | null>(null);
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<AppData>(loadData);
+  const [data, setData] = useState<AppData | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadData().then((loaded) => {
+      if (!cancelled) setData(loaded);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   /** Applies an immutable update, then persists. */
   const update = useCallback((updater: (d: AppData) => AppData) => {
     setData((prev) => {
+      if (!prev) return prev;
       const next = updater(prev);
-      saveData(next);
+      void saveData(next);
       return next;
     });
   }, []);
@@ -256,18 +266,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
-  const replaceData = useCallback(
-    (next: AppData) => {
-      saveData(next);
-      setData(next);
-    },
-    [],
-  );
+  const replaceData = useCallback((next: AppData) => {
+    const normalised = normalizeData(next);
+    void saveData(normalised);
+    setData(normalised);
+  }, []);
 
   const resetData = useCallback(() => {
-    clearStoredData();
+    void clearStoredData();
     setData(defaultData());
   }, []);
+
+  if (!data) {
+    return (
+      <div className="app-root" style={{ display: 'grid', placeItems: 'center', minHeight: '100dvh' }}>
+        <p style={{ color: 'var(--text3)', margin: 0 }}>Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <AppContext.Provider
@@ -312,5 +328,5 @@ export function parseBackupJson(raw: string): AppData {
   if (!isValidBackup(parsed)) {
     throw new Error('File does not look like a Slender backup.');
   }
-  return Object.assign(defaultData(), parsed as Partial<AppData>);
+  return normalizeData(parsed);
 }

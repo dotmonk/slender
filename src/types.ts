@@ -15,7 +15,7 @@ export interface Settings {
   planType:   PlanType;
   planLevel:  number;
   /**
-   * Occupational activity. Kept optional so backups/localStorage written
+   * Occupational activity. Kept optional so backups/stored data written
    * before this feature load unchanged (undefined → desk baseline, +0 kcal).
    * Work is entered as a weekly average (hours/day × days/week) and averaged
    * over 7 days when applied to the daily calorie budget.
